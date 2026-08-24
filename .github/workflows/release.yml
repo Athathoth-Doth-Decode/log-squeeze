@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/create-gh-release-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-assets:
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          # Linux x86_64 (Static musl binary - runs on any Linux distribution)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          # Linux ARM64 (Raspberry Pi 4/5, AWS Graviton, ARM servers)
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+          # macOS Apple Silicon (M1 / M2 / M3 / M4)
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          # macOS Intel (x86_64)
+          - target: x86_64-apple-darwin
+            os: macos-13
+          # Windows x64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: log-squeeze
+          target: ${{ matrix.target }}
+          archive: $bin-$target
+          checksum: sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
