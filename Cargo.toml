@@ -1,0 +1,17 @@
+[package]
+name = "log-squeeze"
+version = "0.2.0"
+edition = "2024"
+description = "Adaptive 3-tier log & context compression engine for AI coding agents, SREs, and DevOps"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Athathoth-Doth-Decode/log-squeeze"
+readme = "README.md"
+keywords = ["log", "compression", "ai-agents", "llm", "sre"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+toml = "1.1.4"
+ureq = { version = "3.4.0", features = ["json"] }
