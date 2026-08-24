@@ -48,10 +48,12 @@ When AI coding assistants (such as Antigravity, Claude Code, Cursor, Aider) or h
 
 * **⚡ Ultra-fast Tier 1 Deterministic Squeezing:** Processes tens of thousands of lines in milliseconds. Masks high-cardinality values (IPv4/IPv6, UUIDs, timestamps, memory addresses) to cluster repetitive log templates.
 * **🛡️ Stack Trace & Error Awareness:** Automatically identifies and protects multi-line exceptions across Python, Java, Go, Rust, and Node.js.
-* **🧠 Tier 2 Token Compression (LLMLingua-2):** Optional token-level pruning for large manifests, docs, and structured data with customizable compression rates (`-r 0.4`).
+* **🧠 Tier 2 Token Compression (LLMLingua-2 + Rust Fallback):**
+  * **Neural Model:** Uses `microsoft/llmlingua-2-bert-base-multilingual-meetingbank` via `uv` (~500 MB weights downloaded once from Hugging Face and cached locally in `~/.cache/huggingface/`).
+  * **Zero-Python / Offline Fallback:** If `uv`/Python or internet access is not available, automatically falls back to an internal **pure Rust token pruner** with zero external dependencies.
 * **🤖 Tier 3 Semantic Root-Cause Analysis:** Seamlessly integrates with any OpenAI-compatible API endpoint (LiteLLM, Ollama, vLLM, OpenAI, Groq) to generate an immediate, structured diagnostic report.
 * **🔄 Adaptive Auto-tiering:** Automatically chooses between Tier 1, Tier 2, or Tier 3 depending on input size, error density, and content type.
-* **📦 Zero Runtime Dependencies:** Standalone native binary with minimal memory footprint.
+* **📦 Zero Runtime Dependencies:** Standalone native binary with minimal memory footprint; runs seamlessly in air-gapped / minimal Linux environments without Python.
 
 ---
 
@@ -115,6 +117,9 @@ cat error.log | log-squeeze -j | jq .
 # Compress a huge Kubernetes manifest or documentation file to 40% size
 cat massive-crds.yaml | log-squeeze -2 -r 0.4
 ```
+> **ℹ️ Note on Tier 2 Execution & Offline Environments:**
+> * **With `uv` / Python:** Uses `microsoft/llmlingua-2-bert-base-multilingual-meetingbank`. On its very first run, `uv` downloads model weights (~500 MB) from Hugging Face into `~/.cache/huggingface/hub/`. Subsequent runs are local and offline.
+> * **Without Python / Air-gapped:** If Python or `uv` is not present, `log-squeeze` automatically uses its built-in **native Rust token pruner** with zero external downloads and sub-millisecond execution.
 
 ### 7. Force Tier 3 (AI Semantic Diagnostic Summary)
 ```bash
