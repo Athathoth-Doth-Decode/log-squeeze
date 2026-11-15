@@ -1,0 +1,8 @@
+I1107 10:00:00.100000       1 controller.go:10] starting worker
+W1107 10:00:01.100000       1 controller.go:11] retry scheduled
+E1107 10:00:02.100000       1 controller.go:12] connection refused
+I1107 10:00:03.100000       1 controller.go:13] still running
+E1107 10:00:04.100000       1 reflector.go:14] cache unavailable
+I1107 10:00:05.100000       1 reflector.go:15] reconnecting
+E1107 10:00:06.100000       1 controller.go:16] request rejected
+I1107 10:00:07.100000       1 controller.go:17] finished iteration

@@ -1,0 +1,22 @@
+=== [log-squeeze] Total: 18 lines | Compressed to: 5 events (72.2% reduction) | Errors: 4 | Warnings: 1 ===
+java.lang.NullPointerException
+  +--- Stack Trace (1 lines):
+  |     at com.example.Main.run(Main.java:10)
+  +---
+Traceback (most recent call last):
+  +--- Stack Trace (4 lines):
+  |   File "<string>", line 1, in <module>
+  |     INFO = 1 / 0
+  |            ~~^~~
+  | ZeroDivisionError: division by zero
+  +---
+Error: request failed
+  +--- Stack Trace (5 lines):
+  |     at connect (node:net:1:1) {
+  |   error: "inner",
+  |   code: 'EFAIL',
+  |   password: '<REDACTED>',
+  | }
+  +---
+W1108 10:00:02.123456 1 worker.go:43] retry
+E1108 10:00:03.123456 1 worker.go:44] unavailable

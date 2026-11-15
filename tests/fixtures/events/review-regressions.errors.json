@@ -1,0 +1,70 @@
+{
+  "stats": {
+    "total_lines": 18,
+    "output_lines": 1,
+    "panics": 0,
+    "fatals": 0,
+    "errors": 4,
+    "warnings": 1,
+    "infos": 3,
+    "debugs": 0,
+    "traces": 0,
+    "unknowns": 0
+  },
+  "clusters_count": 5,
+  "clusters": [
+    {
+      "template": "java.lang.NullPointerException",
+      "level": "Error",
+      "count": 1,
+      "first_example": "java.lang.NullPointerException",
+      "last_example": "java.lang.NullPointerException",
+      "stack_trace": [
+        "    at com.example.Main.run(Main.java:10)"
+      ]
+    },
+    {
+      "template": "Traceback (most recent call last):",
+      "level": "Error",
+      "count": 1,
+      "first_example": "Traceback (most recent call last):",
+      "last_example": "Traceback (most recent call last):",
+      "stack_trace": [
+        "  File \"<string>\", line 1, in <module>",
+        "    INFO = 1 / 0",
+        "           ~~^~~",
+        "ZeroDivisionError: division by zero"
+      ]
+    },
+    {
+      "template": "Error: request failed",
+      "level": "Error",
+      "count": 1,
+      "first_example": "Error: request failed",
+      "last_example": "Error: request failed",
+      "stack_trace": [
+        "    at connect (node:net:1:1) {",
+        "  error: \"inner\",",
+        "  code: 'EFAIL',",
+        "  password: '<REDACTED>',",
+        "}"
+      ]
+    },
+    {
+      "template": "W1108 <TIME> <N> worker.go:<N>] retry",
+      "level": "Warn",
+      "count": 1,
+      "first_example": "W1108 10:00:02.123456 1 worker.go:43] retry",
+      "last_example": "W1108 10:00:02.123456 1 worker.go:43] retry",
+      "stack_trace": []
+    },
+    {
+      "template": "E1108 <TIME> <N> worker.go:<N>] unavailable",
+      "level": "Error",
+      "count": 1,
+      "first_example": "E1108 10:00:03.123456 1 worker.go:44] unavailable",
+      "last_example": "E1108 10:00:03.123456 1 worker.go:44] unavailable",
+      "stack_trace": []
+    }
+  ]
+}

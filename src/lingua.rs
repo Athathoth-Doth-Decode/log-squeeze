@@ -11,6 +11,7 @@ use std::process::{Command, Stdio};
 /// Attempts to use LLMLingua-2 BERT multilingual model via Python/uv if available,
 /// and automatically falls back to the built-in deterministic token pruner if uv is absent.
 pub fn run_lingua_compress(input: &str, rate: f32) -> Result<String, String> {
+    let input = crate::redact::redact(input);
     let uv_bin = which_bin("uv");
     if let Some(uv) = uv_bin {
         let py_script = r#"
@@ -34,7 +35,7 @@ print(res['compressed_prompt'])
 "#;
 
         let mut child = Command::new(uv)
-            .args(&[
+            .args([
                 "run",
                 "--with",
                 "llmlingua>=0.2.2",
@@ -64,23 +65,24 @@ print(res['compressed_prompt'])
         if output.status.success() {
             let result = String::from_utf8_lossy(&output.stdout).into_owned();
             if !result.trim().is_empty() {
-                return Ok(result);
+                return Ok(crate::redact::redact(&result));
             }
         }
     }
 
-    Ok(run_builtin_token_pruner(input, rate))
+    Ok(run_builtin_token_pruner(&input, rate))
 }
 
 /// Fallback deterministic token pruner for environments without Python or PyTorch installed.
 /// Removes low-information stop words and redundant tokens while preserving indentation
 /// and essential syntax characters across English and Russian text.
 pub fn run_builtin_token_pruner(input: &str, target_rate: f32) -> String {
+    let input = crate::redact::redact(input);
     let mut out = String::new();
     let stopwords: HashMap<&str, ()> = [
-        "the", "a", "an", "is", "are", "was", "were", "to", "of", "and", "in", "that", "it",
-        "for", "on", "with", "as", "this", "by", "at", "from", "be", "or", "which",
-        "и", "в", "на", "с", "по", "для", "к", "о", "из", "что", "это", "как",
+        "the", "a", "an", "is", "are", "was", "were", "to", "of", "and", "in", "that", "it", "for",
+        "on", "with", "as", "this", "by", "at", "from", "be", "or", "which", "и", "в", "на", "с",
+        "по", "для", "к", "о", "из", "что", "это", "как",
     ]
     .iter()
     .cloned()

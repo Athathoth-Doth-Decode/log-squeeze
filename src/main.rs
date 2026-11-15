@@ -1,12 +1,8 @@
-mod ai;
-mod config;
-mod lingua;
-mod masker;
-
-use ai::run_litellm_summary;
-use config::AppConfig;
-use lingua::run_lingua_compress;
-use masker::{run_fast_squeeze, EventCluster, SqueezeStats};
+use log_squeeze::ai::run_litellm_summary;
+use log_squeeze::config::AppConfig;
+use log_squeeze::lingua::{run_builtin_token_pruner, run_lingua_compress};
+use log_squeeze::masker::{EventCluster, SqueezeStats, run_fast_squeeze};
+use log_squeeze::redact::redact;
 use serde::Serialize;
 use std::fs::File;
 use std::io::{self, Read};
@@ -16,7 +12,7 @@ use std::path::PathBuf;
 // CLI Args & Orchestration
 // ----------------------------------------------------------------------------
 
-#[derive(Debug)]
+#[derive(Default)]
 struct CliOptions {
     input_file: Option<PathBuf>,
     config_file: Option<PathBuf>,
@@ -31,24 +27,6 @@ struct CliOptions {
     api_key_override: Option<String>,
 }
 
-impl Default for CliOptions {
-    fn default() -> Self {
-        Self {
-            input_file: None,
-            config_file: None,
-            mode_override: None,
-            errors_only: false,
-            summary_only: false,
-            json_output: false,
-            max_lines: None,
-            lingua_rate: None,
-            model_override: None,
-            endpoint_override: None,
-            api_key_override: None,
-        }
-    }
-}
-
 /// Parses command line arguments and flags into a structured `CliOptions` instance.
 /// Supports short flags (-a, -1, -2, -3, -e, -s, -j, -m, -r, -h) as well as long options
 /// for endpoint, model, api key, and custom configuration file path.
@@ -58,10 +36,10 @@ fn parse_args() -> Result<CliOptions, String> {
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "-1" | "--fast" => opts.mode_override = Some("fast".to_string()),
-            "-2" | "--lingua" => opts.mode_override = Some("lingua".to_string()),
-            "-3" | "--ai" | "--semantic" => opts.mode_override = Some("ai".to_string()),
-            "-a" | "--auto" => opts.mode_override = Some("auto".to_string()),
+            "-1" | "--fast" => set_mode(&mut opts, "fast")?,
+            "-2" | "--lingua" => set_mode(&mut opts, "lingua")?,
+            "-3" | "--ai" => set_mode(&mut opts, "ai")?,
+            "-a" | "--auto" => set_mode(&mut opts, "auto")?,
             "-e" | "--errors-only" => opts.errors_only = true,
             "-s" | "--summary" => opts.summary_only = true,
             "-j" | "--json" => opts.json_output = true,
@@ -93,14 +71,14 @@ fn parse_args() -> Result<CliOptions, String> {
                 println!(
                     "log-squeeze v0.2.0 — Adaptive 3-Tier Log & Context Squeezer for LLM Agents\n\n\
                     USAGE:\n    log-squeeze [OPTIONS] [FILE]\n    <stdout> | log-squeeze [OPTIONS]\n\n\
-                    PIPELINE MODES:\n    -a, --auto            Auto-detect best pipeline tier (default)\n    -1, --fast            Tier 1: Deterministic regex mask, dedup & cluster (<5ms)\n    -2, --lingua          Tier 2: Token-level extractive compression (LLMLingua-2)\n    -3, --ai              Tier 3: Semantic root-cause analysis via LiteLLM/Ollama\n\n\
-                    OPTIONS:\n    -e, --errors-only     Filter to ERRORs, WARNs, PANICs and stack traces\n    -s, --summary         Show frequency template clusters summary\n    -j, --json            Output structured JSON (Tier 1)\n    -m, --max-lines <N>   Output line budget limit (default: 200)\n    -r, --rate <float>    Target token retention rate for Lingua (default: 0.5)\n    --model <name>        LiteLLM model override (e.g. llama3.2, qwen3:8b)\n    --endpoint <url>      LiteLLM API endpoint URL\n    --key <key>           LiteLLM API key\n    --config <file>       Custom config path (default: ~/.config/log-squeeze/config.toml)\n    -h, --help            Show this help message\n\n\
+                    PIPELINE MODES:\n    -a, --auto            Local Tier 1 only (default; no network or subprocesses)\n    -1, --fast            Tier 1: Deterministic regex mask, dedup & cluster (<5ms)\n    -2, --lingua          Tier 2: Token-level extractive compression (LLMLingua-2)\n    -3, --ai              Tier 3: Semantic root-cause analysis via LiteLLM/Ollama\n\n\
+                    OPTIONS:\n    -e, --errors-only     Filter to ERRORs, WARNs, PANICs and stack traces\n    -s, --summary         Show frequency template clusters summary\n    -j, --json            Compact JSON with the same Tier 1 selection\n    -m, --max-lines <N>   Hard Tier 1 line cap, including header (positive; default: 200)\n    -r, --rate <float>    Target token retention rate for Lingua (default: 0.5)\n    --model <name>        LiteLLM model override (e.g. qwen3-coder:30b)\n    --endpoint <url>      LiteLLM API endpoint URL\n    --key <key>           LiteLLM API key\n    --config <file>       Custom config path (default: ~/.config/log-squeeze/config.toml)\n    -h, --help            Show this help message\n\n\
                     EXAMPLES:\n    kubectl logs deploy/traefik -n traefik | log-squeeze\n    journalctl -u rke2-server -n 1000 | log-squeeze --ai\n    cat huge-manifest.yaml | log-squeeze --lingua -r 0.4\n    log-squeeze /var/log/syslog -1 -e"
                 );
                 std::process::exit(0);
             }
             other if other.starts_with('-') => {
-                return Err(format!("Unknown option: {}", other));
+                return Err("Unknown option; run --help for supported flags".into());
             }
             file => {
                 opts.input_file = Some(PathBuf::from(file));
@@ -108,23 +86,44 @@ fn parse_args() -> Result<CliOptions, String> {
         }
     }
 
+    let external = matches!(opts.mode_override.as_deref(), Some("ai" | "lingua"));
+    if external && (opts.errors_only || opts.json_output || opts.summary_only) {
+        return Err(
+            "--ai/--lingua cannot be combined with --errors-only, --json, or --summary".into(),
+        );
+    }
+    if opts.errors_only && opts.summary_only {
+        return Err("--errors-only cannot be combined with --summary".into());
+    }
+    if opts.json_output && opts.summary_only {
+        return Err("--json cannot be combined with --summary".into());
+    }
     Ok(opts)
+}
+
+// Select exactly one pipeline for this invocation.
+// Conflicting flags are rejected instead of silently using the last flag.
+// Only an explicit external mode authorizes subprocess or network execution.
+fn set_mode(opts: &mut CliOptions, mode: &str) -> Result<(), String> {
+    if opts
+        .mode_override
+        .as_deref()
+        .is_some_and(|previous| previous != mode)
+    {
+        return Err(
+            "Conflicting pipeline modes; choose one of --auto, --fast, --lingua, --ai".into(),
+        );
+    }
+    opts.mode_override = Some(mode.into());
+    Ok(())
 }
 
 /// Main application entry point orchestrating the 3-tier log compression pipeline.
 /// Reads log stream from stdin or file, applies configuration and command line overrides,
 /// and delegates to Tier 1 (fast clustering), Tier 2 (Lingua token pruning), or Tier 3 (AI summary).
-fn main() -> io::Result<()> {
-    let cli_opts = match parse_args() {
-        Ok(o) => o,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            eprintln!("Run 'log-squeeze --help' for usage.");
-            std::process::exit(1);
-        }
-    };
-
-    let mut config = AppConfig::load_or_create(cli_opts.config_file.as_deref());
+fn run() -> Result<(), String> {
+    let cli_opts = parse_args()?;
+    let mut config = AppConfig::load(cli_opts.config_file.as_deref())?;
 
     if let Some(ref m) = cli_opts.mode_override {
         config.general.mode = m.clone();
@@ -145,53 +144,78 @@ fn main() -> io::Result<()> {
         config.litellm.api_key = Some(k.clone());
     }
 
-    let mut raw_input = String::new();
-    if let Some(ref path) = cli_opts.input_file {
-        let mut file = File::open(path)?;
-        file.read_to_string(&mut raw_input)?;
-    } else {
-        io::stdin().read_to_string(&mut raw_input)?;
+    config.validate()?;
+    // Configuration preferences never authorize external execution.
+    let effective_mode = cli_opts.mode_override.as_deref().unwrap_or("fast");
+    if effective_mode == "ai" {
+        log_squeeze::ai::validate_endpoint(
+            &config.litellm.endpoint,
+            config.get_litellm_api_key().is_some(),
+        )?;
     }
+    // Logs routinely contain stray non-UTF-8 bytes; replace them instead of rejecting the input.
+    let mut raw_bytes = Vec::new();
+    if let Some(ref path) = cli_opts.input_file {
+        let mut file = File::open(path).map_err(|_| "Cannot open input file")?;
+        file.read_to_end(&mut raw_bytes)
+            .map_err(|_| "Cannot read input file")?;
+    } else {
+        io::stdin()
+            .read_to_end(&mut raw_bytes)
+            .map_err(|_| "Cannot read stdin")?;
+    }
+    let raw_input = String::from_utf8_lossy(&raw_bytes).into_owned();
 
     if raw_input.trim().is_empty() {
         return Ok(());
     }
 
-    let effective_mode = config.general.mode.to_ascii_lowercase();
+    let raw_input = redact(&raw_input);
 
     if effective_mode == "lingua" {
-        match run_lingua_compress(&raw_input, config.lingua.rate) {
-            Ok(compressed) => {
-                println!("{}", compressed);
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("[log-squeeze: Lingua pass warning: {}]", e);
-            }
+        let builtin = config.lingua.method == "builtin";
+        if !builtin && !config.lingua.enabled {
+            eprintln!(
+                "[log-squeeze: lingua.enabled = false; using the built-in pruner without subprocesses]"
+            );
         }
+        let compressed = if builtin || !config.lingua.enabled {
+            run_builtin_token_pruner(&raw_input, config.lingua.rate)
+        } else {
+            run_lingua_compress(&raw_input, config.lingua.rate)?
+        };
+        println!("{}", compressed);
+        return Ok(());
     }
 
     let reader = io::Cursor::new(raw_input.as_bytes());
-    let fast_res = run_fast_squeeze(
+    let mut fast_res = run_fast_squeeze(
         reader,
         config.general.max_lines,
         cli_opts.errors_only,
         cli_opts.summary_only,
-    )?;
+    )
+    .map_err(|_| "Tier 1 input processing failed")?;
 
     if cli_opts.json_output {
+        // WHY: Borrow already redacted clusters to serialize without copying log content.
         #[derive(Serialize)]
         struct OutputJson<'a> {
             stats: &'a SqueezeStats,
             clusters_count: usize,
             clusters: &'a [EventCluster],
+            #[serde(skip_serializing_if = "Option::is_none")]
+            budget: Option<&'a log_squeeze::BudgetStats>,
         }
+        // Compact JSON stays within even a one-line cap; its data uses the text selection budget.
+        fast_res.stats.output_lines = 1;
         let out = OutputJson {
             stats: &fast_res.stats,
             clusters_count: fast_res.clusters.len(),
             clusters: &fast_res.clusters,
+            budget: (!fast_res.budget.is_empty()).then_some(&fast_res.budget),
         };
-        println!("{}", serde_json::to_string_pretty(&out).unwrap());
+        println!("{}", serde_json::to_string(&out).unwrap());
         return Ok(());
     }
 
@@ -200,46 +224,31 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
+    // Tier 3 is opt-in twice: the -3 flag and litellm.enabled. Any failure falls back to the
+    // already rendered Tier 1 output so a pipeline never loses the log it was given.
     if effective_mode == "ai" {
-        eprintln!("[log-squeeze: Generating semantic summary via LiteLLM ({})]...", config.litellm.model);
-        match run_litellm_summary(&fast_res.rendered_output, &config) {
-            Ok(summary) => {
-                println!("=== [log-squeeze: AI Semantic Summary (model: {})] ===\n", config.litellm.model);
-                println!("{}", summary.trim());
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("[log-squeeze: LiteLLM fallback to tier-1 output: {}]\n", e);
-                print!("{}", fast_res.rendered_output);
-                return Ok(());
-            }
-        }
-    }
-
-    if fast_res.is_structured_code_heuristic && fast_res.stats.total_lines >= config.thresholds.min_lines_for_lingua && config.lingua.enabled {
-        if let Ok(compressed) = run_lingua_compress(&raw_input, config.lingua.rate) {
-            println!("{}", compressed);
-            return Ok(());
-        }
-    }
-
-    let should_ai = config.litellm.enabled
-        && fast_res.stats.total_lines >= config.thresholds.min_lines_for_ai
-        && fast_res.stats.total_errors_and_warns() > 0;
-
-    if should_ai {
-        match run_litellm_summary(&fast_res.rendered_output, &config) {
-            Ok(summary) => {
-                println!("=== [log-squeeze: AI Semantic Summary (model: {})] ===\n", config.litellm.model);
-                println!("{}", summary.trim());
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("[log-squeeze: LiteLLM auto-pass error: {}, showing tier-1 output]\n", e);
+        if !config.litellm.enabled {
+            eprintln!("[log-squeeze: litellm.enabled = false; showing Tier 1 output]");
+        } else {
+            eprintln!("[log-squeeze: Generating semantic summary via LiteLLM]...");
+            match run_litellm_summary(&fast_res.rendered_output, &config) {
+                Ok(summary) => {
+                    println!("=== [log-squeeze: AI Semantic Summary] ===\n");
+                    println!("{}", summary.trim());
+                    return Ok(());
+                }
+                Err(error) => eprintln!("[log-squeeze: {error}; showing Tier 1 output]"),
             }
         }
     }
 
     print!("{}", fast_res.rendered_output);
     Ok(())
+}
+
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("Error: {}", error);
+        std::process::exit(1);
+    }
 }

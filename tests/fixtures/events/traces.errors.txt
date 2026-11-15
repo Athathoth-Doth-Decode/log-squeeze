@@ -1,0 +1,60 @@
+=== [log-squeeze] Total: 55 lines | Compressed to: 5 events (90.9% reduction) | Errors: 5 | Warnings: 0 ===
+panic: runtime error: invalid memory address or nil pointer dereference
+  +--- Stack Trace (10 lines):
+  | [signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x123]
+  |
+  | goroutine 1 [running]:
+  | main.main()
+  | 	/work/main.go:12 +0x20
+  |
+  | goroutine 2 [chan receive]:
+  | main.worker()
+  | 	/work/worker.go:8 +0x10
+  | exit status 2
+  +---
+Traceback (most recent call last):
+  +--- Stack Trace (12 lines):
+  |   File "app.py", line 7, in <module>
+  |     connect(password="<REDACTED>")
+  |   File "client.py", line 3, in connect
+  |     raise ValueError("bad input")
+  | ValueError: bad input
+  |
+  | During handling of the above exception, another exception occurred:
+  |
+  | Traceback (most recent call last):
+  |   File "app.py", line 9, in <module>
+  |     raise RuntimeError("request failed")
+  | RuntimeError: request failed
+  +---
+thread 'main' panicked at src/main.rs:8:5:
+  +--- Stack Trace (9 lines):
+  | called `Result::unwrap()` on an `Err` value: password=<REDACTED>
+  | stack backtrace:
+  |    0: rust_begin_unwind
+  |              at /rustc/library/std/src/panicking.rs:692:5
+  |    1: core::result::unwrap_failed
+  |              at /rustc/library/core/src/result.rs:1761:5
+  |    2: app::main
+  |              at ./src/main.rs:8:5
+  | note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+  +---
+ERROR database request failed
+  +--- Stack Trace (6 lines):
+  |     at org.example.Client.open(Client.java:17)
+  | Caused by: java.net.SocketTimeoutException: timeout
+  |     at org.example.Socket.read(Socket.java:22)
+  |     Suppressed: java.io.IOException: cleanup
+  |         at org.example.Client.close(Client.java:30)
+  |     ... 2 more
+  +---
+Error: connect ECONNREFUSED 127.0.0.1:5432
+  +--- Stack Trace (7 lines):
+  |     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+  |   errno: -111,
+  |   code: 'ECONNREFUSED',
+  |   syscall: 'connect',
+  |   password: '<REDACTED>',
+  |   port: 5432
+  | }
+  +---

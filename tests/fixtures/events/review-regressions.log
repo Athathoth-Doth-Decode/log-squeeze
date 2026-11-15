@@ -1,0 +1,18 @@
+java.lang.NullPointerException
+    at com.example.Main.run(Main.java:10)
+2026-11-08 10:00:00,123 - INFO - no panic detected
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    INFO = 1 / 0
+           ~~^~~
+ZeroDivisionError: division by zero
+I1108 10:00:00.123456 1 worker.go:42] ready
+Error: request failed
+    at connect (node:net:1:1) {
+  error: "inner",
+  code: 'EFAIL',
+  password: 'FAKE_NODE',
+}
+2026-11-08 10:00:01,123 - INFO - ready
+W1108 10:00:02.123456 1 worker.go:43] retry
+E1108 10:00:03.123456 1 worker.go:44] unavailable
