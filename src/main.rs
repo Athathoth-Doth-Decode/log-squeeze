@@ -69,11 +69,12 @@ fn parse_args() -> Result<CliOptions, String> {
             }
             "-h" | "--help" => {
                 println!(
-                    "log-squeeze v0.2.0 — Adaptive 3-Tier Log & Context Squeezer for LLM Agents\n\n\
+                    "log-squeeze v{} — Adaptive 3-Tier Log & Context Squeezer for LLM Agents\n\n\
                     USAGE:\n    log-squeeze [OPTIONS] [FILE]\n    <stdout> | log-squeeze [OPTIONS]\n\n\
                     PIPELINE MODES:\n    -a, --auto            Local Tier 1 only (default; no network or subprocesses)\n    -1, --fast            Tier 1: Deterministic regex mask, dedup & cluster (<5ms)\n    -2, --lingua          Tier 2: Token-level extractive compression (LLMLingua-2)\n    -3, --ai              Tier 3: Semantic root-cause analysis via LiteLLM/Ollama\n\n\
                     OPTIONS:\n    -e, --errors-only     Filter to ERRORs, WARNs, PANICs and stack traces\n    -s, --summary         Show frequency template clusters summary\n    -j, --json            Compact JSON with the same Tier 1 selection\n    -m, --max-lines <N>   Hard Tier 1 line cap, including header (positive; default: 200)\n    -r, --rate <float>    Target token retention rate for Lingua (default: 0.5)\n    --model <name>        LiteLLM model override (e.g. qwen3-coder:30b)\n    --endpoint <url>      LiteLLM API endpoint URL\n    --key <key>           LiteLLM API key\n    --config <file>       Custom config path (default: ~/.config/log-squeeze/config.toml)\n    -h, --help            Show this help message\n\n\
-                    EXAMPLES:\n    kubectl logs deploy/traefik -n traefik | log-squeeze\n    journalctl -u rke2-server -n 1000 | log-squeeze --ai\n    cat huge-manifest.yaml | log-squeeze --lingua -r 0.4\n    log-squeeze /var/log/syslog -1 -e"
+                    EXAMPLES:\n    kubectl logs deploy/traefik -n traefik | log-squeeze\n    journalctl -u rke2-server -n 1000 | log-squeeze --ai\n    cat huge-manifest.yaml | log-squeeze --lingua -r 0.4\n    log-squeeze /var/log/syslog -1 -e",
+                    env!("CARGO_PKG_VERSION")
                 );
                 std::process::exit(0);
             }
